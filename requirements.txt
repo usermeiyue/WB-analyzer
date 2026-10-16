@@ -1,0 +1,10 @@
+streamlit>=1.55,<2
+opencv-python-headless>=4.10,<6
+Pillow>=10.4,<13
+pandas>=2.2,<4
+numpy>=1.26,<3
+tifffile>=2024.8
+imagecodecs>=2024.6,<2027
+reportlab>=4,<5
+openpyxl>=3.1,<4
+matplotlib>=3.9,<4
