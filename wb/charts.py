@@ -24,12 +24,12 @@ def chart_label(value):
     return '$'+''.join(pieces)+'$'
 
 
-def normalization_chart(raw,bio,protein_id,reference_name,*,grouped=False,dpi=300,font_family='无衬线（DejaVu Sans）',font_pt=9,intensity_only=False,font_style="regular"):
+def normalization_chart(raw,bio,protein_id,reference_name,*,grouped=False,dpi=300,font_family='Sans serif (DejaVu Sans)',font_pt=9,intensity_only=False,font_style="regular"):
     rows=(bio if grouped else raw)
     rows=rows[rows.protein_id==protein_id].copy()
     value='bio_value' if grouped else ('analysis_intensity' if intensity_only else 'normalized_ratio')
     rows=rows[np.isfinite(rows[value].astype(float))]
-    if rows.empty:raise ValueError('当前蛋白没有可用比值；请先核实条带与内参。')
+    if rows.empty:raise ValueError('No valid ratios for this protein. Check bands and loading control.')
     prop=FontProperties(fname=str(font_path(font_family,font_style)),size=font_pt)
     fig=Figure(figsize=(max(4,min(12,len(rows)*.55)),3.6),dpi=dpi);ax=fig.subplots()
     if grouped:
@@ -39,17 +39,17 @@ def normalization_chart(raw,bio,protein_id,reference_name,*,grouped=False,dpi=30
             means.append(vals.mean());sds.append(vals.std(ddof=1) if len(vals)>1 else 0);points.append(vals)
         ax.bar(range(len(groups)),means,yerr=sds,capsize=4,color='#b5c5d5',edgecolor='black',width=.65)
         for i,vals in enumerate(points):ax.scatter(i+np.linspace(-.12,.12,len(vals)) if len(vals)>1 else [i],vals,color='black',s=22,zorder=3)
-        labels=groups;caption='均值 ± SD；每个点为一个生物学重复（技术复孔先取均值）。n=1 时不显示 SD。'
+        labels=groups;caption='Mean ± SD; each point represents one biological replicate after averaging technical replicates. SD is not shown for n=1.'
     else:
         vals=rows[value].to_numpy(float);ax.bar(range(len(rows)),vals,color='#879fba',edgecolor='black',width=.65)
-        labels=rows['sample'].tolist();caption='每根柱为一个泳道的靶蛋白/对应泳道内参比值；未添加误差棒或显著性检验。'
-    if intensity_only and not grouped:caption='每根柱为一个泳道的背景扣除条带强度；当前未选择内参。'
+        labels=rows['sample'].tolist();caption="Each bar is one lane's target / loading-control ratio. No error bars or significance tests are added."
+    if intensity_only and not grouped:caption="Each bar is one lane's background-subtracted intensity; no loading control is selected."
     marked=raw[raw.protein_id==protein_id]
     manual_count=int(marked['zero_override_applied'].fillna(False).sum()) if 'zero_override_applied' in marked else 0
     auto_count=int((marked['zero_assignment_source']=='automatic_below_detection_threshold').sum()) if 'zero_assignment_source' in marked else 0
     count=manual_count+auto_count
     if count:
-        caption+='按 0 计算：自动未检出 '+str(auto_count)+' 个泳道，用户手动标记 '+str(manual_count)+' 个泳道。'
+        caption+='Assigned zero: '+str(auto_count)+' automatically undetected lane(s), '+str(manual_count)+' manually marked lane(s).'
         fig.text(.02,.015,'Set to 0: '+str(auto_count)+' auto-undetected lane(s); '+str(manual_count)+' manually marked lane(s).',fontproperties=prop)
     ax.set_xticks(range(len(labels)),[chart_label(x) for x in labels],rotation=45 if len(labels)>6 else 0,ha='right' if len(labels)>6 else 'center',fontproperties=prop)
     ax.set_ylabel(chart_label(rows.protein.iloc[0])+(' intensity' if intensity_only else ' / '+chart_label(reference_name)),fontproperties=prop)

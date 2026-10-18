@@ -96,13 +96,13 @@ class Source:
 def load_sources(data: bytes, name: str) -> list[Source]:
     """Decode each TIFF page explicitly, without silently selecting a z/channel plane."""
     if len(data) > 100 * 1024 * 1024:
-        raise ValueError("单文件超过 100 MB；请拆分原始 TIFF 页。")
+        raise ValueError('File exceeds 100 MB. Split the original TIFF pages.')
     frames = [];encodings=[]
     if name.lower().endswith((".tif", ".tiff")):
         with tifffile.TiffFile(io.BytesIO(data)) as tf:
             for page in tf.pages:
                 if math.prod(page.shape) > MAX_PIXELS * 4:
-                    raise ValueError("TIFF 页超过大小限制。")
+                    raise ValueError('TIFF page exceeds size limits.')
                 try:
                     frames.append(page.asarray())
                     inv=page.photometric==tifffile.PHOTOMETRIC.MINISWHITE;white=1.;black=0.;label='native grayscale'
@@ -110,21 +110,21 @@ def load_sources(data: bytes, name: str) -> list[Source]:
                         lut=page.colormap.astype(np.int64)
                         differences=np.diff(lut[0])
                         if not (np.array_equal(lut[0],lut[1]) and np.array_equal(lut[0],lut[2]) and len(differences) and differences[0]!=0 and np.all(differences==differences[0])):
-                            raise ValueError('非线性或彩色 TIFF 调色板不能直接用于本软件定量，请导出原始灰度信号页。')
+                            raise ValueError('Nonlinear or color TIFF palettes cannot be quantified directly. Export the original grayscale signal page.')
                         inv=bool(differences[0]<0);white=float(lut.max()/65535);black=float(lut.min()/65535)
                         label='native palette indices; affine grayscale palette applied to display only'
                     elif inv:label='native grayscale; TIFF MINISWHITE applied to display only'
                     encodings.append((inv,white,black,label))
                 except (ValueError,ModuleNotFoundError) as error:
                     if 'imagecodecs' in str(error):
-                        raise ValueError('此 TIFF 使用压缩编码，缺少读取依赖。请停止程序，在终端运行：'+sys.executable+' -m pip install imagecodecs，然后重新启动程序。') from error
+                        raise ValueError('This compressed TIFF requires imagecodecs. Stop the app and run: '+sys.executable+' -m pip install imagecodecs, then restart the app.') from error
                     raise
                 if len(frames) > 100:
-                    raise ValueError("TIFF 最多支持 100 页。")
+                    raise ValueError('A TIFF may contain at most 100 pages.')
     else:
         with Image.open(io.BytesIO(data)) as im:
             if im.width * im.height > MAX_PIXELS:
-                raise ValueError("图片超过 4000 万像素。")
+                raise ValueError('Image exceeds 40 million pixels.')
             if im.mode == "P":
                 im = im.convert("RGB")
             frames.append(np.asarray(im).copy());encodings.append((False,1.,0.,"native grayscale"))
@@ -161,7 +161,7 @@ def load_sources(data: bytes, name: str) -> list[Source]:
         native_rgb = None
         if raw.ndim == 3 and raw.shape[-1] in (3, 4):
             if raw.shape[-1] == 4 and not np.all(raw[..., 3] == np.iinfo(raw.dtype).max):
-                raise ValueError("透明图像不可定量；请提供不含透明度的原始图像。")
+                raise ValueError('Transparent images cannot be quantified. Provide opaque original images.')
             native_rgb = raw[..., :3].copy()
             native_rgb.setflags(write=False)
             raw_dtype = raw.dtype
@@ -170,13 +170,13 @@ def load_sources(data: bytes, name: str) -> list[Source]:
         elif raw.ndim == 2:
             gray, raw_dtype = raw.copy(), raw.dtype
         else:
-            raise ValueError(f"第 {page + 1} 页形状 {raw.shape} 不是二维灰度/RGB；请显式导出通道与平面。")
+            raise ValueError(f"Page {page + 1}, shape {raw.shape}, is not a 2D grayscale/RGB image. Export channels and planes explicitly.")
         if gray.size > MAX_PIXELS or not np.isfinite(gray).all():
-            raise ValueError("像素数超限，或含 NaN / Inf。")
+            raise ValueError('Pixel limit exceeded, or image contains NaN / Inf.')
         if np.issubdtype(raw_dtype, np.unsignedinteger):
             ceiling = float(np.iinfo(raw_dtype).max)
         else:
-            raise ValueError("当前定量支持无符号 8/16/32 位图像；浮点/有符号图像需先明确采集范围。")
+            raise ValueError('Quantification supports unsigned 8/16/32-bit images. Float or signed images require an explicitly defined acquisition range.')
         gray.setflags(write=False)
         identity = sha(data)[:16] + f"-p{page}"
         result.append(Source(identity, name, data, page, gray, ceiling,
@@ -190,13 +190,13 @@ def visual_dark_polarity(source: Source) -> str:
 
 
 def polarity_label(source: Source, polarity: str) -> str:
-    return "深色条带 / 浅背景" if polarity == visual_dark_polarity(source) else "亮条带 / 深背景"
+    return 'Dark bands / light background' if polarity == visual_dark_polarity(source) else 'Light bands / dark background'
 
 
 def saturation(source: Source, polarity: str) -> np.ndarray:
     """Instrument limits, not observed image maximum. Dark film can clip at the lower end."""
     if source.ceiling <= source.floor:
-        raise ValueError("传感器上限必须大于下限。")
+        raise ValueError('Sensor maximum must exceed minimum.')
     data = source.native_rgb if source.native_rgb is not None else source.gray
     mask = data >= source.ceiling if polarity == "light" else data <= source.floor
     return np.any(mask, axis=-1) if mask.ndim == 3 else mask
@@ -204,7 +204,7 @@ def saturation(source: Source, polarity: str) -> np.ndarray:
 
 def display_image(source: Source, overlay: np.ndarray | None = None) -> Image.Image:
     if source.display_white <= source.display_black:
-        raise ValueError("展示白点必须大于黑点。")
+        raise ValueError('Display white point must exceed black point.')
     z = (source.gray.astype(np.float32) - source.display_black) / (source.display_white - source.display_black)
     if source.native_inverted:z=1-z
     z=source.palette_black+z*(source.palette_white-source.palette_black)
@@ -228,10 +228,10 @@ def image_data_url(im: Image.Image, max_side=1400) -> str:
 
 def rect_slice(rect: list[int], shape: tuple[int, int]) -> tuple[slice, slice]:
     if len(rect) != 4 or any(not isinstance(x, (int, np.integer)) for x in rect):
-        raise ValueError("选框必须是整数 x, y, width, height。")
+        raise ValueError('Regions must use integer x, y, width and height.')
     x, y, w, h = rect
     if x < 0 or y < 0 or w < 1 or h < 1 or x + w > shape[1] or y + h > shape[0]:
-        raise ValueError(f"选框 {rect} 超出原图范围 {shape}。")
+        raise ValueError(f"Region {rect} exceeds source-image bounds {shape}.")
     return slice(y, y + h), slice(x, x + w)
 
 
@@ -263,7 +263,7 @@ class Protein:
 def default_protein(source: Source, lanes: int, name="Target") -> Protein:
     h, w = source.gray.shape
     if w < lanes * 3 or h < 8:
-        raise ValueError("原图太小，无法设置此数量泳道。")
+        raise ValueError('Source image is too small for this number of lanes.')
     left = int(w * .05)
     pitch = max(3, int(w * .9 / lanes))
     y, rh = int(h * .35), max(2, int(h * .10))
@@ -283,7 +283,7 @@ def quant_roi_signature(protein: Protein) -> str:
 
 def measure(source: Source, protein: Protein, lane: int, exclude_saturated=True, subtract_background=True) -> dict:
     if source.ceiling <= source.floor:
-        raise ValueError("传感器上限必须大于下限。")
+        raise ValueError('Sensor maximum must exceed minimum.')
     signal_rect=protein.signal[lane]
     bg_rect=protein.background[lane] if subtract_background else None
     sig = source.gray[rect_slice(signal_rect, source.gray.shape)].astype(np.float64)
@@ -316,20 +316,20 @@ def measure(source: Source, protein: Protein, lane: int, exclude_saturated=True,
 
 def quantify(sources: dict[str, Source], proteins: list[Protein], samples: list[dict], reference_id: str | None,
              control_condition: str | None = None, exclude_saturated=True, subtract_background=True, strict_replicates=True, require_confirmed=False) -> tuple[pd.DataFrame,pd.DataFrame,pd.DataFrame]:
-    if any(not str(s.get('sample','')).strip() for s in samples):raise ValueError('泳道标注不能为空。')
+    if any(not str(s.get('sample','')).strip() for s in samples):raise ValueError('Lane labels cannot be empty.')
     stats_valid=not any(not str(s.get(k,'')).strip() for s in samples for k in ('condition','bio_rep','tech_rep'))
     keys=[(s.get('condition',''),str(s.get('bio_rep','')),str(s.get('tech_rep',''))) for s in samples]
     stats_valid=stats_valid and len(set(keys))==len(keys)
-    if strict_replicates and not stats_valid:raise ValueError('样品、条件与重复编号不能为空，同条件的生物学/技术重复编号不能重复。')
+    if strict_replicates and not stats_valid:raise ValueError('Sample, condition and replicate IDs must be filled; biological/technical replicate combinations must be unique within each condition.')
     if len({p.id for p in proteins}) != len(proteins):
-        raise ValueError("蛋白 ID 重复。")
+        raise ValueError('Duplicate protein IDs.')
     ref = next((p for p in proteins if p.id == reference_id), None)
     if reference_id and ref is None:
-        raise ValueError("选定内参不存在。")
+        raise ValueError('Selected loading control does not exist.')
     measured = {}
     for p in proteins:
         if len(p.signal) != len(samples) or (subtract_background and len(p.background) != len(samples)):
-            raise ValueError("泳道数与样品数不一致；重新生成泳道框或恢复样品数。")
+            raise ValueError('Lane count does not match samples. Regenerate regions or restore the sample count.')
         for lane in range(len(samples)):
             try:
                 if require_confirmed and p.quant_roi_signature!=quant_roi_signature(p):
@@ -394,7 +394,7 @@ def get_font(size: int):
 def figure(sources: dict[str,Source], proteins: list[Protein], samples: list[dict], *, dpi=300,
            lane_width_mm=7.0, font_pt=8.0, gap_mm=2.0, label_margin_mm=22.0) -> tuple[Image.Image,dict]:
     if dpi not in (300,600):
-        raise ValueError("DPI 必须为 300 或 600。")
+        raise ValueError('DPI must be 300 or 600.')
     unit=dpi/25.4
     width=max(1,round(len(samples)*lane_width_mm*unit))
     margin=round(label_margin_mm*unit)
@@ -413,7 +413,7 @@ def figure(sources: dict[str,Source], proteins: list[Protein], samples: list[dic
         for xx,ww in segments:
             rect_slice([xx,y,ww,h],source.gray.shape)
             if xx<x or xx+ww>x+w or (previous_end is not None and xx<previous_end):
-                raise ValueError("拼接区段必须在 crop 内且按原图从左到右不重叠排列。")
+                raise ValueError('Splice segments must be inside the crop, ordered left to right without overlap.')
             previous_end=xx+ww
         joined=Image.new('RGB',(sum(ww for xx,ww in segments),h),'white')
         if source.id not in display_cache:
@@ -434,7 +434,7 @@ def figure(sources: dict[str,Source], proteins: list[Protein], samples: list[dic
                      "height":height,"extent":row_extent,"upsampled":scale>1.001})
     height=top+sum(r['extent'] for r in rows)+gap*max(0,len(rows)-1)
     if (width+margin)*height > MAX_PIXELS:
-        raise ValueError("组合图超过 4000 万像素，请减少面板尺寸或使用 300 DPI。")
+        raise ValueError('Figure exceeds 40 million pixels. Reduce panel size or use 300 DPI.')
     result=Image.new('RGB',(margin+width,height),'white')
     draw=ImageDraw.Draw(result)
     row_y=top
@@ -442,7 +442,7 @@ def figure(sources: dict[str,Source], proteins: list[Protein], samples: list[dic
     for ri,r in enumerate(rows):
         p=r['p'];x,y,w,h=p.crop
         if max(font.getlength(p.name),font.getlength(p.molecular_weight)) > margin-12:
-            raise ValueError('蛋白标注太长，请增大左留白或减小字号。')
+            raise ValueError('Protein label is too long. Increase the left margin or reduce font size.')
         image_y=row_y+(r['extent']-r['height'])//2
         result.paste(r['image'],(margin,image_y))
         # Independent strips are disclosed by mandatory borders plus white space.
@@ -461,14 +461,14 @@ def figure(sources: dict[str,Source], proteins: list[Protein], samples: list[dic
         else:
             for expected,actual in zip(expected_lane_centers,centers):
                 if (expected is None) != (actual is None) or (expected is not None and abs(expected-actual)>width/len(samples)*.12):
-                    raise ValueError("不同蛋白的样品泳道未对齐；请核对各条 crop、泳道框和拼接区段。")
+                    raise ValueError('Sample lanes are not aligned between proteins. Check crops, lane regions and splice segments.')
         # Top labels are shared only after validating lane mapping across all strips.
         for lane,sample in enumerate(samples):
             roi=p.signal[lane]
             center=map_x(roi[0]+roi[2]/2)
             if center is not None:
                 if font.getlength(sample['sample']) > width/len(samples)*.95:
-                    raise ValueError('样品名超出泳道宽度，请缩短名称、增大每泳道宽度或减小字号。')
+                    raise ValueError('Sample label exceeds lane width. Shorten the label, increase lane width or reduce font size.')
                 if ri==0:
                     draw.text((center,top-font.size*.55),sample['sample'],font=font,fill='black',anchor='mb')
         # Auto-dividers mark every separate source segment, even if user requests contiguous joins.
@@ -551,13 +551,13 @@ def project_bytes(sources: dict[str,Source],proteins: list[Protein],samples: lis
 def restore_project(data: bytes):
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         if sum(i.file_size for i in z.infolist())>500*1024*1024 or len(z.infolist())>500:
-            raise ValueError('项目解压后超过限制。')
+            raise ValueError('Unpacked project exceeds size limits.')
         m=json.loads(z.read('project.json'));a=json.loads(z.read('audit.json'))
         if m['version'] != VERSION:
-            raise ValueError('项目版本不支持。')
+            raise ValueError('Unsupported project version.')
         audit=Audit(m['session'],a['events'])
         if not audit.verify():
-            raise ValueError('审计链不完整或被修改。')
+            raise ValueError('Processing history chain is incomplete or modified.')
         sources={};decoded={}
         for info in m['sources']:
             digest=info['original_sha256'];suffix=Path(info['name']).suffix.lower()
@@ -565,11 +565,11 @@ def restore_project(data: bytes):
             if key not in decoded:
                 original=z.read('originals/'+digest+suffix)
                 if sha(original)!=digest:
-                    raise ValueError('原图哈希不匹配。')
+                    raise ValueError('Original image hash mismatch.')
                 decoded[key]=load_sources(original,info['name'])
             source=decoded[key][info['page']]
             if source.id!=info['id'] or sha(source.gray.tobytes())!=info['gray_sha256']:
-                raise ValueError('解码像素哈希不匹配。')
+                raise ValueError('Decoded pixel hash mismatch.')
             for prop in ('ceiling','floor','display_black','display_white','brightness','contrast'):
                 setattr(source,prop,info['sensor_'+prop] if prop in ('ceiling','floor') else info[prop])
             source.display_invert=bool(info.get("display_invert",False))
@@ -580,10 +580,11 @@ def restore_project(data: bytes):
             sources[source.id]=source
         proteins=[Protein(**p) for p in m['proteins']]
         if not 1 <= len(m['samples']) <= 40:
-            raise ValueError('蛋白或样品数量无效。')
+            raise ValueError('Invalid protein or sample count.')
         for p in proteins:
             if p.source_id not in sources or len(p.signal)!=len(m['samples']) or len(p.background)!=len(m['samples']):
-                raise ValueError('项目选框与泳道不一致。')
+                raise ValueError('Project regions do not match lane count.')
             rect_slice(p.crop,sources[p.source_id].gray.shape)
         audit.add('restore_project',{'project_sha256':sha(data),'restored_event_count':len(audit.events)})
-        return sources,proteins,m['samples'],audit,m['settings']
+        from .annotations import migrate_font_settings
+        return sources,proteins,m['samples'],audit,migrate_font_settings(m['settings'])

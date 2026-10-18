@@ -24,11 +24,11 @@ def propose_workspace(source, protein, lanes, threshold=5., fraction=.8, region=
     disjoint background rectangle on the full original (even for a tight crop).
     Automatic no-band flags are explicit editable decisions, not a detection limit.
     """
-    if source.ceiling<=source.floor:raise ValueError('传感器上限必须大于下限。')
-    if lanes<1 or not 2<=threshold<=15 or not .4<=fraction<=1:raise ValueError('检测参数无效。')
+    if source.ceiling<=source.floor:raise ValueError('Sensor maximum must exceed minimum.')
+    if lanes<1 or not 2<=threshold<=15 or not .4<=fraction<=1:raise ValueError('Invalid detection parameters.')
     region=region or search_rect(source,protein);rect_slice(region,source.gray.shape)
     x,y,w,h=region
-    if h<4 or w/lanes<3:raise ValueError('搜索区域太小，请扩大区域或减少泳道数量。')
+    if h<4 or w/lanes<3:raise ValueError('Search region is too small. Enlarge it or reduce the lane count.')
     signal=source.ceiling-source.gray.astype(float) if protein.polarity=='dark' else source.gray.astype(float)-source.floor
     pitch=w/lanes;proposals=[];peaks=[]
     for lane in range(lanes):
@@ -79,14 +79,14 @@ def quant_fingerprint(sources, proteins, samples, reference_id, workspaces, excl
 
 
 def calculate(sources, targets, reference, samples, workspaces, exclude_saturated=True):
-    if not targets:raise ValueError('请选择至少一个要测量的靶蛋白。')
-    if not samples:raise ValueError('请填写泳道和样品信息。')
-    if reference and any(p.id==reference.id for p in targets):raise ValueError('内参不能同时作为靶蛋白。')
+    if not targets:raise ValueError('Select at least one target to measure.')
+    if not samples:raise ValueError('Enter lane and sample information.')
+    if reference and any(p.id==reference.id for p in targets):raise ValueError('A loading control cannot also be a target.')
     measured=[]
     for p in targets+([reference] if reference else []):
         source=sources[p.source_id];workspace=workspaces.get(p.id)
         if not workspace or workspace.get('source_id')!=p.source_id or len(workspace['lanes'])!=len(samples):
-            raise ValueError('请为 '+p.name+' 自动生成定量框，或手动画条带框和背景框。')
+            raise ValueError('Generate measurement regions for '+p.name+', or draw band and background regions manually.')
         for lane,roi in enumerate(workspace['lanes']):
             background=None
             try:
@@ -100,7 +100,7 @@ def calculate(sources, targets, reference, samples, workspaces, exclude_saturate
             user_zero=bool(roi.get('no_band'));zero=user_zero or automatic or (np.isfinite(net) and net<=0)
             value=(0. if zero else net) if m['valid'] else np.nan
             reason='user_marked_no_visible_band' if user_zero else ('automatic_below_detection_threshold' if automatic else ('not_above_background' if zero else ''))
-            note='手动标记无条带，按 0 计算' if user_zero else ('自动未检出，按 0 计算' if automatic else ('信号不高于背景，按 0 计算' if zero else '已测量'))
+            note='Manually marked absent; assigned zero' if user_zero else ('Automatically undetected; assigned zero' if automatic else ('Signal not above background; assigned zero' if zero else 'Measured'))
             measured.append({**samples[lane],**m,'protein_id':p.id,'protein':p.name,'lane':lane+1,'role':'reference' if reference and p.id==reference.id else 'target',
                 'band_intensity':value,'analysis_intensity':value,'measured_net_intensity':net,'analysis_status':m['status'],'measurement_note':note,
                 'signal_xywh':json.dumps(roi.get('signal')),'background_xywh':json.dumps(background),
@@ -169,7 +169,7 @@ def match_first_lane_size(source, protein, workspace):
     first=workspace['lanes'][0].get('signal')
     if first is None:return
     h,w=source.gray.shape;fw,fh=first[2:]
-    if fw>w or fh>h:raise ValueError('第一个泳道框超出原图大小。')
+    if fw>w or fh>h:raise ValueError('Lane 1 region exceeds the source image.')
     for roi in workspace['lanes'][1:]:
         old=roi.get('signal')
         if old is None:continue

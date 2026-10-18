@@ -15,15 +15,15 @@ def crop_corners(rect, angle=0):
 
 def validate_crop(rect, angle, shape):
     rect_slice(rect,shape)
-    if not math.isfinite(angle) or abs(angle)>45:raise ValueError('旋转角度须在 −45° 到 45° 之间。')
+    if not math.isfinite(angle) or abs(angle)>45:raise ValueError('Rotation must be between −45° and 45°.')
     corners=crop_corners(rect,angle)
     if (corners[:,0]<-.01).any() or (corners[:,1]<-.01).any() or (corners[:,0]>shape[1]+.01).any() or (corners[:,1]>shape[0]+.01).any():
-        raise ValueError('旋转后的裁剪框超出原图，请缩小或向图内移动。')
+        raise ValueError('Rotated crop exceeds the source image. Resize or move it inward.')
 
 
 def fit_aspect(rect, aspect, shape):
     x,y,w,h=rect
-    if aspect<=0:raise ValueError('裁片宽高比必须大于零。')
+    if aspect<=0:raise ValueError('Strip aspect ratio must be positive.')
     hh=max(1,round(w/aspect));hh=min(hh,shape[0])
     ww=min(w,max(1,round(hh*aspect)),shape[1])
     return [max(0,min(shape[1]-ww,round(x+(w-ww)/2))),max(0,min(shape[0]-hh,round(y+(h-hh)/2))),ww,hh]
@@ -36,7 +36,7 @@ def extract_strip(source: Source, protein: Protein):
     x,y,w,h=protein.crop
     if not angle:
         return display_image(source).crop((x,y,x+w,y+h))
-    if protein.segments:raise ValueError('旋转裁剪与非连续区段不能同时使用；请分别添加蛋白裁片。')
+    if protein.segments:raise ValueError('Rotated crops cannot use noncontiguous segments. Add separate strips instead.')
     c=math.cos(math.radians(angle));s=math.sin(math.radians(angle));cx=x+w/2;cy=y+h/2
     # Pixel-center convention makes angle=0 identical to native cropping.
     matrix=np.array([[c,-s,cx-c*(w-1)/2+s*(h-1)/2-.5],
@@ -119,7 +119,7 @@ def fixed_crop(rect, size, shape, angle=0.):
     ey=max(h/2,(abs(w*math.sin(t))+abs(h*math.cos(t)))/2)
     xmin=math.ceil(ex-w/2);xmax=math.floor(image_w-ex-w/2)
     ymin=math.ceil(ey-h/2);ymax=math.floor(image_h-ey-h/2)
-    if xmin>xmax or ymin>ymax:raise ValueError('这张原图放不下第一张确定的裁剪尺寸；请使用更大原图或减小第一张裁剪框。')
+    if xmin>xmax or ymin>ymax:raise ValueError('Source image cannot fit the template crop. Use a larger image or reduce the first crop size.')
     x=min(xmax,max(xmin,round(rect[0]+rect[2]/2-w/2)))
     y=min(ymax,max(ymin,round(rect[1]+rect[3]/2-h/2)))
     result=[x,y,w,h];validate_crop(result,angle,shape);return result
@@ -127,7 +127,7 @@ def fixed_crop(rect, size, shape, angle=0.):
 
 def quantification_boxes_from_crop(protein, shape, lanes):
     """Uniform proposed ROIs at the chosen strip; requires visual review, never confirmation."""
-    if not protein.crop_selected:raise ValueError('请先确认本蛋白裁剪，再生成定量框。')
+    if not protein.crop_selected:raise ValueError("Confirm this protein's crop before generating measurement regions.")
     x,y,w,h=protein.crop;pitch=w/lanes
     rw=max(1,round(pitch*.65));rh=max(1,round(h*.6));bh=max(1,round(h*.2))
     angle=math.radians(protein.crop_angle);cx=x+w/2;cy=y+h/2

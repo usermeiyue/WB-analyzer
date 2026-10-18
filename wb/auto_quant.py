@@ -15,13 +15,13 @@ def crop_signature(protein):
 
 
 def auto_measure(source,protein,lanes,*,threshold_sigma=5.,lane_fraction=.8,exclude_saturated=True,allow_demo=False,roi_overrides=None):
-    if source.ceiling<=source.floor:raise ValueError('传感器上限必须大于下限。')
-    if not protein.crop_selected and not allow_demo:raise ValueError('请先确认 '+protein.name+' 的裁剪位置。')
-    if not 2<=threshold_sigma<=15 or not .4<=lane_fraction<=1:raise ValueError('自动检测参数超出范围。')
+    if source.ceiling<=source.floor:raise ValueError('Sensor maximum must exceed minimum.')
+    if not protein.crop_selected and not allow_demo:raise ValueError('Confirm the crop for '+protein.name+' first.')
+    if not 2<=threshold_sigma<=15 or not .4<=lane_fraction<=1:raise ValueError('Automatic detection parameters are out of range.')
     validate_crop(protein.crop,protein.crop_angle,source.gray.shape)
-    if protein.segments:raise ValueError('自动定量需要连续裁条，请使用未拼接的原图裁剪。')
+    if protein.segments:raise ValueError('Automatic quantification requires a continuous, unspliced source region.')
     x,y,w,h=protein.crop
-    if h<8 or w/lanes<4:raise ValueError('裁条高度至少 8 像素，每泳道至少 4 像素。')
+    if h<8 or w/lanes<4:raise ValueError('The strip must be at least 8 pixels high, with at least 4 pixels per lane.')
     corners=crop_corners(protein.crop,protein.crop_angle)
     x0=max(0,int(np.floor(corners[:,0].min())));x1=min(source.gray.shape[1],int(np.ceil(corners[:,0].max())))
     y0=max(0,int(np.floor(corners[:,1].min())));y1=min(source.gray.shape[0],int(np.ceil(corners[:,1].max())))
@@ -37,7 +37,7 @@ def auto_measure(source,protein,lanes,*,threshold_sigma=5.,lane_fraction=.8,excl
         mask=inside&(np.abs(u-center)<pitch*lane_fraction/2)
         bgmask=mask&((v<edge)|(v>=h-edge))
         bgvalues=signal[bgmask]
-        if bgvalues.size<4:raise ValueError('背景像素不足，请增加裁条上下背景。')
+        if bgvalues.size<4:raise ValueError('Insufficient background pixels. Include more background above and below the strip.')
         # Fit a linear baseline to the upper/lower edge medians, tolerating smooth gradients.
         upper=mask&(v<edge);lower=mask&(v>=h-edge)
         a=float(np.median(signal[upper]));b=float(np.median(signal[lower]))
@@ -74,7 +74,7 @@ def auto_measure(source,protein,lanes,*,threshold_sigma=5.,lane_fraction=.8,excl
                         'not_detected_manual':manual,'zero_override_applied':bool(manual and valid),
                         'zero_assignment_source':'user_marked_no_visible_band' if manual else ('automatic_below_detection_threshold' if not detected else ''),
                         'signal_xywh':json.dumps(bounds),'auto_band_rows':json.dumps([lo,hi]),'area_px':int(band.sum()),
-                        'saturated_fraction':saturation_fraction,'valid':valid,'measurement_note':'未检出条带，按 0 计算' if assigned else '自动检测到条带',
+                        'saturated_fraction':saturation_fraction,'valid':valid,'measurement_note':'No band detected; assigned zero' if assigned else 'Band detected automatically',
                         'analysis_status':'ok' if valid else ('pixels_outside_sensor_range' if out_of_range else 'saturated_signal_or_background'),
                         'background_subtracted':True,'polarity':protein.polarity})
     saved=(roi_overrides or {}).get(protein.id,{})
@@ -91,17 +91,17 @@ def auto_measure(source,protein,lanes,*,threshold_sigma=5.,lane_fraction=.8,excl
                        background_xywh=json.dumps(roi['background']),detection_snr=np.nan,
                        zero_override_applied=bool(manual and m['valid']),
                        zero_assignment_source='user_marked_no_visible_band' if manual else ('manual_roi_not_above_background' if not detected else ''),
-                       measurement_note='用户确认框：按 0 计算' if manual or not detected else '用户确认框：已测量条带',
+                       measurement_note='User-confirmed region: assigned zero' if manual or not detected else 'User-confirmed region: band measured',
                        analysis_status=m['status'],roi_method='user_confirmed_rectangle')
     return results
 
 
 def auto_quantify(sources,targets,reference,samples,**options):
-    if reference is None or not targets:raise ValueError('请选择内参和至少一个靶蛋白。')
-    if any(p.id==reference.id for p in targets):raise ValueError('靶蛋白不能同时作为内参。')
+    if reference is None or not targets:raise ValueError('Select a loading control and at least one target.')
+    if any(p.id==reference.id for p in targets):raise ValueError('A target cannot also be its loading control.')
     refrows=auto_measure(sources[reference.source_id],reference,len(samples),**options);records=[]
     for p in targets:
-        if p.membrane_id and reference.membrane_id and p.membrane_id!=reference.membrane_id:raise ValueError('靶蛋白与内参的膜编号不一致，请核实配对。')
+        if p.membrane_id and reference.membrane_id and p.membrane_id!=reference.membrane_id:raise ValueError('Target and control membrane IDs differ. Verify pairing.')
         for lane,m in enumerate(auto_measure(sources[p.source_id],p,len(samples),**options)):
             r=refrows[lane];ratio=np.nan;status=m['analysis_status']
             if not r['valid'] or not np.isfinite(r['analysis_intensity']) or r['analysis_intensity']<=0:status+=';invalid_or_nonpositive_reference'

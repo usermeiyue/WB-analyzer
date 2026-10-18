@@ -3,7 +3,19 @@ import re
 from pathlib import Path
 from PIL import ImageFont
 
-FONT_FILES={'无衬线（DejaVu Sans）':'font.ttf','衬线（DejaVu Serif）':'serif.ttf','等宽（DejaVu Sans Mono）':'mono.ttf'}
+FONT_FILES={'Sans serif (DejaVu Sans)':'font.ttf','Serif (DejaVu Serif)':'serif.ttf','Monospace (DejaVu Sans Mono)':'mono.ttf'}
+LEGACY_FONT_NAMES={
+    '\u65e0\u886c\u7ebf\uff08DejaVu Sans\uff09':'Sans serif (DejaVu Sans)',
+    '\u886c\u7ebf\uff08DejaVu Serif\uff09':'Serif (DejaVu Serif)',
+    '\u7b49\u5bbd\uff08DejaVu Sans Mono\uff09':'Monospace (DejaVu Sans Mono)',
+}
+
+def migrate_font_settings(value):
+    if isinstance(value,dict):
+        return {k:LEGACY_FONT_NAMES.get(v,v) if isinstance(v,str) and (k=='font_family' or k.endswith('_font_family')) else migrate_font_settings(v) for k,v in value.items()}
+    if isinstance(value,list):return [migrate_font_settings(v) for v in value]
+    return value
+
 # Use installed proprietary fonts without distributing their files.
 for label,candidates in {
     'Arial':['/System/Library/Fonts/Supplemental/Arial.ttf','C:/Windows/Fonts/arial.ttf'],
@@ -17,9 +29,10 @@ GREEK=dict(zip(('alpha beta gamma delta epsilon zeta eta theta iota kappa lambda
 def greek(text):
     return re.sub(r'\\([A-Za-z]+)',lambda m:GREEK.get(m[1],m[0]),str(text))
 
-FONT_STYLES={'regular':'Regular（常规）','bold':'Bold（加粗）','italic':'Italic（斜体）','bold_italic':'Bold Italic（粗斜体）'}
+FONT_STYLES={'regular':'Regular','bold':'Bold','italic':'Italic','bold_italic':'Bold Italic'}
 
 def font_path(family,style='regular'):
+    family=LEGACY_FONT_NAMES.get(family,family)
     filename=FONT_FILES.get(family,'font.ttf');path=Path(filename)
     if not path.is_absolute():path=Path(__file__).resolve().parent.parent/'assets'/filename
     if style=='regular':return path
@@ -33,7 +46,7 @@ def available_styles(family):return [style for style in FONT_STYLES if font_path
 
 def font_for(size,family,style='regular'):
     path=font_path(family,style)
-    if not path.is_file():raise ValueError('所选字体没有该字形，请选择 Regular 或内置 DejaVu 字体。')
+    if not path.is_file():raise ValueError('This font style is unavailable. Choose Regular or a bundled DejaVu font.')
     return ImageFont.truetype(str(path),max(1,round(size)))
 
 def runs(text,size):

@@ -1,112 +1,86 @@
-# WB Image Processor & Analyzer
+# Western Blot Image Processor & Analyzer
 
-中文 Streamlit 应用：原始 WB 图像定量、同泳道内参归一化、固定尺寸裁条组合、科学标注及项目保存。
+A Python/Streamlit tool for Western blot quantification, loading-control normalization, cropping and figure annotation.
 
-## 安装和启动
+## 1. Features and usage
 
-建议 Python 3.12。Mac 终端逐行执行：
+- TIFF/PNG/JPEG input; native 16-bit grayscale pages preferred when available.
+- Editable band and local background regions, with copy/paste, delete and undo.
+- Lane-matched normalization, CSV/Excel tables, and per-lane or mean ± SD charts.
+- Fixed-size figure strips, formatted labels, and 300/600 DPI TIFF/PDF export.
+- Editable project ZIPs retaining original files and processing history.
+
+### Start locally
+
+Python 3.12 is the tested environment. In the directory containing `app.py`:
 
 ```bash
-cd ~/Documents/wb-analyzer
-python3 -m venv .venv
-source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```
 
-已安装时先按 Control+C 停止旧进程，再激活环境、运行最后一行。浏览器打开终端给出的本机地址。无需 API Key，原始图片不发送到图像处理 API。
+Open the URL printed in the terminal, usually `http://localhost:8501`. Try **Load synthetic demo** first.
 
-## 定量与归一化：内参 → 靶蛋白 → 最后计算
+### Analyze an experiment
 
-上传 TIFF、PNG 或 JPG，填写泳道样品信息，并添加实际蛋白名称、对应原图。不会默认添加 GAPDH 等蛋白。无需先完成组合图裁剪。
+1. **Upload images**, or restore a project ZIP. Prefer original lossless TIFF; JPEG cannot recover acquisition intensities.
+2. **Samples:** enter lane count and labels. Figure group headings and statistical conditions are separate. Edit condition/replicate defaults to match the experiment.
+3. **Add / manage proteins:** name each protein, select its image and verify membrane IDs. One entry produces one figure strip.
+4. **Images and cropping:** choose the displayed band polarity; draw/review a crop and click **Confirm crop**. The first confirmed crop defines all figure-strip dimensions. Figure crops and measurement regions are separate.
+5. **Quantification and normalization:** select control and targets; **Auto-select regions** for each protein. Review every band. Resizing lane 1's band synchronizes other existing band sizes; all lanes remain independently resizable afterward. Moving lane 1 alone preserves custom sizes.
+6. Enable **Show background regions**: orange = band, blue = background used in calculation. Choose **Background (blue)** under **Edit region**, or click a blue box, to move/resize/redraw it. Manual backgrounds stay fixed when bands move. Hiding affects display only. **Reset this lane to automatic background** restores automatic selection. Re-running auto-selection replaces all regions for that protein.
+7. Click **Calculate intensities and normalization** after edits. Download results, prepare the figure under **Figure and export**, and save a project ZIP before closing.
 
-1. **选择内参**：在“内参 Loading Control”选蛋白，点击该处唯一的“自动选框”，一次显示所有泳道的条带框。核对后手动修改。
-2. **选择靶蛋白**：选择一个或多个“归一化靶蛋白”，用“调整哪个靶蛋白”切换；每个蛋白同样只有一个“自动选框”按钮。框只用于预览和编辑，不会触发计算。
-3. **最后计算**：在选框区域下方点击“计算条带强度与归一化”。按对应泳道计算靶蛋白强度 / 内参强度。结果表可复制、下载 CSV 或 Excel；柱状图可选逐泳道或分组均值 ± SD，下载 PNG/PDF，也可下载本次定量 ZIP。
+For labels, choose the overall font **Regular** and use `*Pfkl*^{S775A/S775A}` for italic Pfkl with regular superscript. Also supported: `IL_{1}β`, `**bold**`, `***bold italic***`, and `\mathrm{regular}`.
 
-框操作：
+## 2. Synthetic examples
 
-- 点击原图上其他条带框，或用泳道选择器选中；默认显示橙色条带框；勾选“显示背景框”可查看蓝色背景框，并切换编辑对象。
-- 默认“移动框”：拖动框即可移动。“调整大小”：拖边缘或四角缩放。“新建 / 重画”：拖动替换当前泳道框。普通移动时误点空白和轻微点击抖动不会重画或删除框。第 1 泳道框改变宽高时同步本蛋白其他现有框；所有泳道均可独立移动和改变大小。
-- 点击“复制框”，切换泳道或蛋白，再点击“粘贴框”。复制的是原始像素坐标和尺寸；粘贴后可移动到目标位置。复制后的框独立编辑。
-- “删除框”只删除选中框；删除后在原图拖动可创建新框。已有框时，必须选择“新建 / 重画”才会替换。
-- “上一泳道 / 下一泳道”连续调整，已画的框保留。无需逐个确认。
-- 再次点击“自动选框”会替换该蛋白所有泳道的当前框；它不会自动计算。
-- 定量页顶部“撤销上一步”恢复最近一次框修改，也支持删除、粘贴、自动选框和无条带标记；可连续撤销，保留最近 100 步。换泳道和复制本身不计入修改历史。历史限当前会话；重新加载项目会清空。
-- 默认放大条带区域，使用“视图适配所有条带”重新适配，取消勾选可查看全图。放大只改变操作视图，定量使用原图坐标及像素。
+**These are simulated data, not experimental evidence or validation of biological accuracy.** Synthetic 16-bit inputs are in [`examples/`](examples/).
 
-背景用于扣除胶片/膜上的底噪。程序按当前条带框在邻近上下区域自动建议不重叠的背景区域，不需要手动画背景框；移动、缩放后背景会跟随重算。明细表仍保留背景坐标和扣除值，便于核查。无法找到有效背景时标为无法测量，不用零背景冒充有效结果。自动背景估计并不能保证适合复杂背景。
+![Synthetic band regions (orange) and background regions (blue)](docs/images/regions.png)
 
-自动生成的框是建议，请核对条带、泳道顺序和背景。自动未检出时靶蛋白强度与比值按 0 处理；调整框会改为人工测量。若自动漏检但框无需改变，可点击“按当前框人工测量”。人工框使用实际背景扣除积分；无可见条带时勾选“该泳道无条带，按 0 计算”。
+![Synthetic assembled figure](docs/images/figure.png)
 
-内参未检出、为 0、存在饱和像素或选框无效时，比值显示“无法计算”，下载表中留空。删除框不会自动变成 0。缺框、重叠、越界等问题会显示到对应泳道，其余有效泳道仍可计算。框、样品、蛋白选择或计算参数改变后，旧结果和下载失效，需在最后一步重新计算。
+![Synthetic target/loading-control ratios](docs/images/normalization.png)
 
-Excel 包含归一化、全部蛋白强度（含内参）、生物学重复和均值/SD 四个工作表。项目保存所有定量框和标记；恢复后点击计算即可重算。
+Regenerate with `python3 examples/generate_readme_examples.py`.
 
-## 测量定义
+## 3. Calculation methods
 
-深色条带：`signal = sensor_ceiling - original_gray`；亮色条带：`signal = original_gray - sensor_floor`。
+Measurements use native decoded pixels in floating-point arithmetic, not displayed or exported figure pixels. For native pixel `p` and configured sensor limits `L/U`, signal is `s = U - p` for native dark bands, or `s = p - L` for native light bands. Inverse TIFF display and inversion are mapped to the visual polarity choices.
 
-`raw_integrated = sum(signal inside band ROI)`
+```text
+N                     = band-region width × height
+Raw integrated signal = sum of s within the band region
+Background value      = mean s within the selected background region
+Net band intensity    = raw integrated signal - background value × N
+Normalized ratio      = target net intensity / same-lane control net intensity
+```
 
-`measured_net_intensity = raw_integrated - local_background_mean_or_median * ROI_area`
+Projects retaining the median background setting use the median instead of the mean. Background and band areas need not match: the background estimates signal per pixel.
 
-`normalized_ratio = target_analysis_intensity / corresponding_loading_control_intensity`
+**Automatic background:** up to four nearby rectangles above/below the band are checked, using its horizontal span. The lowest-mean-signal candidate is selected. This is a suggestion; inspect it and use manual regions when inappropriate. The displayed and measured background selection is identical.
 
-只使用这一种归一化，没有相对对照条件的二次倍数。原始积分、背景积分、实际净积分保留在明细中；用于归一化的非正净信号、自动未检出或人工标记无条带为 0。亮度/对比度/反色不参与定量计算。背景扣除是信号测量的一部分，不是额外一次归一化。
+**Zeros and invalid values:** automatically undetected bands, manually marked absent bands and nonpositive net signals are assigned zero. Detailed exports retain the unassigned net measurement and reason. For a visible band missed automatically, edit its region or use **Measure current region manually**. Zero/invalid control intensity produces an unavailable ratio.
 
-自动选框在每泳道搜索区域定位垂直信号峰，参考较低信号及邻近原图背景估计噪声；紧裁条可以在裁条外建议背景框。自动检测不能识别蛋白身份，也不能证明绝对无表达。多排条带、不均匀泳道、复杂背景、宽条带或倾斜膜需核实并调整。定量矩形在原图上积分，不使用展示图插值像素。
+**Statistics:** average technical replicates within each biological replicate and condition, then calculate the biological-replicate mean and sample SD. No significance test is performed. Ratios are not additionally scaled to make a control condition equal to 1.
 
-目标和内参通过用户选择及泳道顺序配对。两者填写不同膜编号时阻止该配对；空编号不要求额外确认，但也不能证明实验配对成立。
+## 4. Common issues and precautions
 
-默认排除含饱和像素的条带或背景，可在定量设置中修改；关闭剔除不使饱和信号变得可靠。16-bit 传感器上限默认 65535；12-bit 数据装在 16-bit 容器中时应按仪器改为 4095。极值阈值检测不保证线性范围。JPEG 有损，优先原始无损 TIFF。
+| Issue | Action |
+|---|---|
+| Visible band reported as zero | Check polarity, region placement and detection status. Use manual measurement for an automatic miss. |
+| Ratio unavailable | Check missing/overlapping regions, control intensity, membrane IDs, sensor limits and saturation exclusions. |
+| Poor background estimate | Show blue regions and select representative, band-free areas. Recheck after polarity changes. |
+| Results become stale | Recalculate after editing regions or parameters. |
+| Multiple TIFF pages | Verify the selected signal page; a file may include a lower-bit-depth display page. |
+| Compressed TIFF fails to load | Run `python3 -m pip install imagecodecs` in the same environment, then restart. |
+| Labels are clipped | Adjust font size, margins or positions. kDa text does not create actual marker bands. |
+| Session lost | Restore a downloaded project ZIP; sessions are not permanent storage. |
 
-## 裁剪、标注与组合图
-
-原图的自动条带排检测先显示待确认裁剪框。移动、旋转、调整后点击确认。第一张确认的像素宽高成为模板；后续裁条尺寸一致。重新编辑第一张并确认后同步其他裁条尺寸。组合图不再按泳道数量逐条伸缩。图像裁剪与定量框分别服务于排版和原图测量。
-
-顶部样品名、右侧蛋白名、Marker 分别设置字体和字号。可直接输入 α、β、γ 或 `\alpha`、`\beta` 等；上标 `^{2}`，下标 `_{1}`。允许添加任意自由文字并设置位置。Marker 文字的位置可独立移动，不修改真实 Marker 条带。字体含 DejaVu Sans/Serif/Mono；已安装的 Arial、Times New Roman 等会列出。
-
-只允许全图一致的展示调整，没有单条带增亮、擦除、克隆或局部修饰工具。非连续泳道和多膜组合应保留分隔线及披露。输出 300/600 DPI 无损 TIFF 和图像 PDF；PDF 组合图的文字为栅格，需核对目标期刊要求，不能保证满足所有期刊规范。
-
-## 保存和验证
-
-“保存项目”保留原始文件、样品、框、标注及参数。原图/参数哈希和操作日志用于追溯，不能证明实验真实性。关闭页面可能丢失未保存的内存状态。
-
-运行测试：`python3 -m unittest discover -s tests -v`。核心代码：`wb/quantification.py`（统一框状态与计算），`wb/quant_ui.py`（三步定量流程），`wb/core.py`（原始图/测量/导出/项目），`wb/charts.py`（柱状图），`roi_component/index.html`（原图选框），`wb/layout.py`（组合排版）。
-
-## 本次更新
-
-改为内参选框、靶蛋白选框、最后计算；取消整排/单泳道等多套选框入口。自动建议和手动拖框共同编辑同一组测量框。可选择图上的其他条带框，复制、粘贴、删除、重新绘制及撤销。条带区域放大预览，明确区分移动/缩放/重画，默认隐藏背景框，可按需显示和手动编辑。定量预览高度限制为 480 屏幕像素，显示比例不改变原始像素坐标。
-
-## TIFF 灰度方向修复
-
-识别 TIFF 线性灰度调色板及 MINISWHITE。原始像素和测量积分保留不变，显示遵从原文件的灰度编码；“深色条带 / 浅背景”等选项自动映射到对应的原始像素方向。旧项目恢复时保留之前的显示反色效果及测量方向，不会自动改写蛋白信号方向。新文件默认方向遵从原文件灰度编码。非线性/彩色 TIFF 调色板不能直接定量，需导出原始灰度信号页。
-
-原图选择器标明页号和位深，调色板页单独注明。目标和内参位深不同时显示提示；建议使用对应原始信号页并核实测量条件，而不要混用 8-bit 显示页与 16-bit 信号页直接解释绝对比值。
-
-## 标注字形及 kDa 单位
-
-泳道、右侧蛋白名、Marker、kDa 单位和任意自由文字均可独立设置 Regular（默认）、Bold、Italic、Bold Italic；内置 DejaVu 三种字体提供所有真实字形文件，希腊字母及上下标沿用所选字形。系统 Arial/Times New Roman 等仅列出实际安装的字形，避免假加粗或假斜体。所有标注字号支持 1–72 pt、0.1 pt 微调。
-
-在组合图的“kDa 单位：独立字体、字号和位置”中调整左右/上下偏移；正值向右/向下，负值向左/向上。它与各行 Marker 数字的位置及字号独立，移出画布时显示原因。设置保存于项目和导出元数据。过大的字号可能需要增加留白或调整位置；字号可选范围不是期刊推荐范围。
-
-## 默认使用 16-bit 图像页
-
-每个上传文件默认只显示一个图像页，优先选择原生 16-bit 灰度页；没有该页时使用文件已有的灰度页，不会把 8-bit 转成伪 16-bit。其他页通过“切换其他图像页（可选）→ 显示全部图像页”选择。原始文件与所有页面保留，旧项目已有的选页、裁剪与定量框不会自动更改。
-
-### TIFF 灰度方向修复（2026-10-15）
-- 对包含 8-bit 调色板显示页和 16-bit 原始页的 TIFF，只有相邻页尺寸相同且像素相关性绝对值至少为 0.99 时，才将调色板黑白方向用于原始页显示；保留全部原始像素及页。
-- 信号方向选项按当前画面上的条带颜色显示，并随显示反色同步更新名称；不会因反色修改已有定量方向。
-- 恢复旧项目时保留原有显示效果、原始像素、选框和定量方向。之前手动选过方向的蛋白，请检查“信号方向”并重新计算。
-
-## 本次界面与标注更新
-删除裁图页面旧“精确输入坐标”和定量页面数字坐标入口，直接在图上操作。
-每个蛋白的第 1 泳道决定该蛋白所有现有定量框的宽高；自动选框也统一尺寸。所有泳道均可独立移动和改变大小；仅移动第 1 框不会同步尺寸。调整第 1 框时，其他框保留中心，边缘框自动移入原图；删除框不自动恢复。一次撤销恢复整次同步。旧项目保留原有框，首次改变第 1 框宽高时同步。
-局部字体：`*Pfkl*^{S775A/S775A}` 仅 Pfkl 斜体，上标常规（整体选择 Regular）。支持 `**加粗**`、`***粗斜体***`、`\mathrm{常规}`、`\textit{斜体}`、`\textbf{加粗}`，以及嵌套上下标。用于组合图和柱状图文字；输入表格保留原始格式代码。
-
-## 可见背景框
-在每个蛋白的定量编辑器勾选“显示背景框”，橙色为条带、蓝色为实际用于扣除的背景。选择“编辑对象 → 背景框”可移动、调整大小、新建/重画、复制、粘贴或删除；也可直接点选蓝框。隐藏只影响显示，仍使用同一背景计算。
-手动指定的背景会固定保留，移动/缩放条带或第 1 框同步尺寸不会覆盖它。“当前泳道恢复自动背景”重新启用邻近背景选择。再次点击“自动选框”会重新生成该蛋白所有框，包括背景。所有修改可撤销。
-背景框缺失、越界、与对应条带框重叠，或按设置检出饱和时，测量标记无效；请重新选到无条带的背景区域。背景面积无需等于条带面积，扣除量按背景均值（或项目保留的中位数算法）乘以条带面积计算。
-背景位置及自动/手动来源会随项目保存，并在定量明细中导出。修改后需重新计算。
+- Include the complete target band without adjacent bands. Use a consistent selection policy and representative backgrounds.
+- Verify target/control sample pairing. User-entered membrane IDs do not prove correct pairing.
+- Validate the linear detection range. No saturation flag does **not** establish linearity. A 16-bit file container does not prove a 16-bit acquisition range; use instrument/export information for sensor limits.
+- Brightness, contrast and inversion change presentation, not quantitative pixels. Figure TIFFs are 8-bit RGB; original higher-bit-depth files remain in the project ZIP. DPI/interpolation do not add original detail.
+- Disclose splices and assembled panels, retain originals and follow journal requirements. Passing software tests does not validate every experimental measurement.
+- Hosted versions process uploads on the server; local runs process them on your computer. Processing history is not a tamper-proof signature or authenticity certification.
